@@ -1,0 +1,26 @@
+Here’s a **detailed, practical, and achievable** 33-week study plan for **Mathematics**, tailored to building a **solid foundation and practical skills** with 25 hours of total study time (approx. **45 minutes per week**).  
+
+---
+
+### **1. Daily Breakdown (Weekly Structure)**  
+Since your time is limited, focus on **consistency**—**45–60 minutes/week**, broken into **2–3 short sessions** (e.g., 20-30 minutes each).  
+
+| **Week** | **Topic** | **Tasks** | **Time (min/week)** |
+|----------|----------|----------|-------------------|
+| **1-3** | **Arithmetic Fundamentals** | Review operations (+, -, ×, ÷), fractions, decimals, percentages. Solve 5-10 practice problems per session. | 45 |
+| **4-6** | **Basic Algebra** | Variables, simple equations, linear expressions. Practice solving for x in equations. | 45 |
+| **7-9** | **Geometry Basics** | Shapes, angles, area/perimeter, intro to triangles. Draw and calculate properties. | 45 |
+| **10-12** | **Graphing & Functions** | Plotting points, linear functions (y = mx + b). Sketch 2-3 graphs per session. | 45 |
+| **13-15** | **Word Problems** | Apply algebra/arithmetic to real-life scenarios (e.g., speed, ratios). Solve 3-5 problems/week. | 45 |
+| **16-18** | **Exponents & Roots** | Laws of exponents, square roots, simple radical equations. Drill 5-10 problems. | 45 |
+| **19-21** | **Intro to Quadratics** | Solve ax² + bx + c = 0 (factoring basics). Practice 3-5 problems. | 45 |
+| **22-24** | **Data & Probability** | Mean/median/mode, basic probability (coin flips, dice). Work through exercises. | 45 |
+| **25-27** | **Trigonometry Basics** | Right triangles, sin/cos/tan (SOHCAHTOA). Solve 3-5 problems. | 45 |
+| **28-30** | **Polynomials & Factoring** | Add/subtract polynomials, factor simple expressions. Do 5 exercises. | 45 |
+| **31-33** | **Review & Application** | Revisit weak areas, solve mixed problems, mock mini-test (20 problems). | 45 |
+
+---
+
+### **2. Time Allocation & Prioritization**  
+Since the goal is a **general understanding**, prioritize:  
+- **Algebra & Problem-Solving (30%)** (Weeks 4-6, 10-12, 19-21, 28-30)
