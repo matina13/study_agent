@@ -1,247 +1,161 @@
 #!/usr/bin/env python3
 """
-Simple Study Planner Agent using LangChain
+Study Planner Agent
 """
 
-import os
-from dotenv import load_dotenv
-import openai
-from langchain.prompts import PromptTemplate
+from base_agent import BaseAgent
 
 
-class StudyPlannerAgent:
-    """Simple Study Planner Agent using LangChain concepts"""
+class StudyPlannerAgent(BaseAgent):
+    """Handles study planning, methods, topic breakdown, and coordination"""
 
     def __init__(self):
-        """Initialize the agent"""
-        load_dotenv()
+        super().__init__("StudyPlanner")
+        self.content_processor = None
 
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENROUTER_API_KEY not found in environment")
+    def register_content_processor(self, content_processor):
+        """Register the content processor agent"""
+        self.content_processor = content_processor
+        print("🔗 ContentProcessor connected to StudyPlanner")
 
-        # Set up OpenAI client for OpenRouter
-        self.client = openai.OpenAI(
-            api_key=self.api_key,
-            base_url="https://openrouter.ai/api/v1"
-        )
-        self.model = "deepseek/deepseek-chat-v3-0324:free"
+    def create_plan(self, subject: str, hours: str, deadline: str, focus: str, goals: str):
+        """Create study plan with file context"""
+        file_context = self._get_file_context()
 
-        # Set up LangChain prompts
-        self.setup_prompts()
+        prompt = f"""Create study plan for {subject}. Hours: {hours}, Deadline: {deadline}
+        Focus: {focus}, Goals: {goals}
 
-        print("Study Planner Agent initialized with LangChain prompts")
+        File Context: {file_context}
 
-    def setup_prompts(self):
-        """Set up LangChain prompt templates"""
+        Include:
+        • Weekly schedule with hours per day
+        • Daily study blocks
+        • Weekly milestones
+        • Study techniques
+        • Review schedules
 
-        self.study_plan_prompt = PromptTemplate(
-            input_variables=["subject", "hours", "deadline", "focus_areas", "goals"],
-            template="""Create a detailed study plan for:
+        Be specific and actionable."""
 
-Subject: {subject}
-Available time: {hours} hours total
-Deadline: {deadline}
-Areas to focus on: {focus_areas}
-Learning goals: {goals}
+        result = self.call_ai(prompt, 1000)
+        self.memory.store('current_plan', result)
+        return result
 
-Please provide:
-1. Daily breakdown with specific tasks tailored to the focus areas
-2. Time allocation for each topic, prioritizing the focus areas
-3. Recommended study methods for this subject and goals
-4. Key milestones and checkpoints aligned with the learning goals
-5. Tips for staying motivated and on track
-6. How to measure progress toward the stated goals
+    def get_methods(self, subject: str, topic: str, learning_style: str):
+        """Get study methods with context"""
+        file_context = self._get_file_context()
 
-Make it practical, achievable, and personalized to the focus areas and goals."""
-        )
+        prompt = f"""Best study methods for {subject}, topic: {topic}, style: {learning_style}
 
-        self.study_methods_prompt = PromptTemplate(
-            input_variables=["subject", "topic", "learning_style"],
-            template="""Recommend the best study methods for:
+        File Context: {file_context}
 
-Subject: {subject}
-Specific topic: {topic}
-Learning style: {learning_style}
+        Include:
+        • Top 3 techniques
+        • Step-by-step instructions
+        • Tools needed
+        • How to measure success
 
-Please provide:
-1. Top 3 study techniques for this subject and topic
-2. How to implement each technique specifically for this topic
-3. Tools and resources needed
-4. Common mistakes to avoid when studying this topic
+        Make it practical."""
 
-Be specific and practical."""
-        )
+        return self.call_ai(prompt)
 
-        self.topic_breakdown_prompt = PromptTemplate(
-            input_variables=["subject", "topic", "difficulty"],
-            template="""Break down this learning topic into manageable parts:
+    def break_down_topic(self, subject: str, topic: str, difficulty: str):
+        """Break down complex topic"""
+        file_context = self._get_file_context()
 
-Subject: {subject}
-Topic: {topic}
-Difficulty level: {difficulty}
+        prompt = f"""Break down {subject} topic "{topic}" for {difficulty} learners
 
-Please provide:
-1. 5-7 subtopics in logical order
-2. Estimated time for each subtopic
-3. Prerequisites for each part
-4. How each part builds on the previous one
+        File Context: {file_context}
 
-Make it step-by-step and easy to follow."""
-        )
+        Include:
+        • Prerequisites
+        • 5-7 subtopics in order
+        • For each: concepts, time, examples
+        • Practice exercises
 
-    def call_ai(self, prompt: str) -> str:
-        """Helper method to call the AI with formatted prompt"""
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=600,
-                temperature=0.7
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            error_msg = f"AI service error: {str(e)}"
-            print(f"Error calling AI: {error_msg}")
-            return error_msg
+        Clear and organized."""
 
-    def save_to_file(self, content: str, filename_prefix: str) -> str:
-        """Save content to a file"""
-        try:
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{filename_prefix}_{timestamp}.txt"
+        return self.call_ai(prompt)
 
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(content)
+    def comprehensive_planning(self, subject: str, hours: str, deadline: str, focus: str, goals: str,
+                               files: list = None):
+        """Handle comprehensive planning with file processing"""
+        print(f"\n🎯 Comprehensive planning for {subject}")
 
-            return filename
-        except Exception as e:
-            print(f"Error saving file: {e}")
-            return None
+        results = []
 
-    def create_study_plan(self):
-        """Interactive method to create a study plan with user input"""
-        print("\nLet's create your personalized study plan!")
-        subject = input("What subject do you want to study? ").strip()
-        hours = input("How many total hours do you have available? ").strip()
-        deadline = input("When is your deadline? (e.g., 'in 2 weeks', 'next Monday'): ").strip()
-        focus_areas = input("Any specific areas to focus on? (Press Enter to skip): ").strip()
-        goals = input("Any particular learning goals? (Press Enter to skip): ").strip()
+        # Step 1: Process files if provided
+        if files and self.content_processor:
+            self.send_message("ContentProcessor", "Process files for comprehensive planning")
+            file_insights = []
 
-        # Use default values if focus areas or goals are empty
-        if not focus_areas:
-            focus_areas = "General understanding of the subject"
-        if not goals:
-            goals = "Build solid foundation and practical skills"
+            for file_path in files:
+                try:
+                    content = self.content_processor.read_file(file_path)
+                    if not content.startswith("Error"):
+                        insight = self.content_processor.analyze_for_planning(content, file_path)
+                        file_insights.append(f"📄 {file_path}: {insight}")
+                except:
+                    continue
 
-        print(f"\nCreating your study plan ({hours} hours)...")
+            if file_insights:
+                results.append("FILE ANALYSIS:\n" + "\n\n".join(file_insights))
 
-        # Format the prompt using LangChain PromptTemplate
-        formatted_prompt = self.study_plan_prompt.format(
-            subject=subject,
-            hours=hours,
-            deadline=deadline,
-            focus_areas=focus_areas,
-            goals=goals
-        )
+        # Step 2: Create enhanced study plan
+        self.send_message("ContentProcessor", "Creating enhanced plan with file context")
+        plan = self.create_plan(subject, hours, deadline, focus, goals)
+        results.append(f"STUDY PLAN:\n{plan}")
 
-        # Call the AI with the formatted prompt
-        plan = self.call_ai(formatted_prompt)
+        # Step 3: Add strategic recommendations
+        recommendations = self._get_recommendations(subject, plan)
+        results.append(f"RECOMMENDATIONS:\n{recommendations}")
 
-        print("\n" + "=" * 60)
-        print("YOUR PERSONALIZED STUDY PLAN")
-        print("=" * 60)
-        print(plan)
-        print("=" * 60)
+        # Step 4: Session summary
+        comms = self.memory.get('communications')
+        summary = f"""SESSION SUMMARY:
+        • Files Processed: {len(self.memory.get('file_analyses'))}
+        • Agent Communications: {len(comms)}
+        • Enhanced Plan Created: Yes
 
-        # Option to save the plan
-        save_option = input("\nWould you like to save this study plan to a file? (y/n): ").lower().strip()
-        if save_option == 'y':
-            filename = self.save_to_file(plan, "study_plan")
-            if filename:
-                print(f"Study plan saved to: {filename}")
-            else:
-                print("Failed to save study plan")
+        Recent Communications:"""
 
-        return plan
+        for comm in comms[-5:]:
+            summary += f"\n  • {comm['time']} - {comm['from']} → {comm['to']}: {comm['message']}"
 
-    def get_study_method_advice(self):
-        """Get study method advice using LangChain prompt with user input"""
-        print("\nLet's get personalized study method advice!")
-        subject = input("What subject do you want study method advice for? ").strip()
-        topic = input("Any specific topic within this subject? (Press Enter to skip): ").strip()
-        learning_style = input("What is your learning style? (visual, auditory, kinesthetic, mixed): ").strip()
+        results.append(summary)
 
-        # Use default if topic is empty
-        if not topic:
-            topic = "general concepts"
+        return "\n\n" + "=" * 60 + "\n\n".join(results)
 
-        print(f"\nGenerating study method advice...")
+    def _get_file_context(self):
+        """Get file analysis context"""
+        analyses = self.memory.get('file_analyses')
+        if not analyses:
+            return "No file analysis available"
 
-        # Format the prompt using LangChain PromptTemplate
-        formatted_prompt = self.study_methods_prompt.format(
-            subject=subject,
-            topic=topic,
-            learning_style=learning_style
-        )
+        context = []
+        for file_path, analysis in analyses.items():
+            context.append(f"{file_path}: {analysis}")
 
-        # Call the AI with the formatted prompt
-        advice = self.call_ai(formatted_prompt)
+        return "\n".join(context) if context else "No file analysis available"
 
-        print("\n" + "=" * 50)
-        print("STUDY METHOD ADVICE")
-        print("=" * 50)
-        print(advice)
-        print("=" * 50)
+    def _get_recommendations(self, subject: str, plan: str):
+        """Add strategic recommendations"""
+        prompt = f"""Provide strategic study recommendations for {subject}:
 
-        # Option to save the advice
-        save_option = input("\nWould you like to save this advice to a file? (y/n): ").lower().strip()
-        if save_option == 'y':
-            filename = self.save_to_file(advice, "study_methods")
-            if filename:
-                print(f"Study methods saved to: {filename}")
-            else:
-                print("Failed to save study methods")
+        Plan: {plan[:1000]}
 
-        return advice
+        Give:
+        • Key success factors
+        • Potential challenges
+        • Optimization tips
+        • Resource suggestions
 
-    def break_down_topic(self):
-        """Break down a topic using LangChain prompt with user input"""
-        print("\nLet's break down a complex topic!")
-        subject = input("What subject is this topic in? ").strip()
-        topic = input("Which topic would you like to break down? ").strip()
-        difficulty = input("What's the difficulty level? (beginner, intermediate, advanced): ").strip()
+        Keep concise and actionable."""
 
-        print(f"\nBreaking down {topic}...")
+        return self.call_ai(prompt)
 
-        # Format the prompt using LangChain PromptTemplate
-        formatted_prompt = self.topic_breakdown_prompt.format(
-            subject=subject,
-            topic=topic,
-            difficulty=difficulty
-        )
-
-        # Call the AI with the formatted prompt
-        breakdown = self.call_ai(formatted_prompt)
-
-        print("\n" + "=" * 50)
-        print("TOPIC BREAKDOWN")
-        print("=" * 50)
-        print(breakdown)
-        print("=" * 50)
-
-        # Option to save the breakdown
-        save_option = input("\nWould you like to save this breakdown to a file? (y/n): ").lower().strip()
-        if save_option == 'y':
-            filename = self.save_to_file(breakdown, "topic_breakdown")
-            if filename:
-                print(f"Topic breakdown saved to: {filename}")
-            else:
-                print("Failed to save topic breakdown")
-
-        return breakdown
-
-
-if __name__ == "__main__":
-    print("Study Planner Agent module loaded successfully")
+    def show_communications(self):
+        """Show agent communications"""
+        comms = self.memory.get('communications')
+        print(f"\n📞 Communications ({len(comms)}):")
+        for comm in comms[-10:]:
+            print(f"{comm['time']} | {comm['from']} → {comm['to']}: {comm['message']}")
