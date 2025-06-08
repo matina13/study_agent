@@ -1,20 +1,25 @@
+# content_processor_agent.py
 import os
 from pathlib import Path
 import PyPDF2
 import docx
 from base_agent import BaseAgent
+from RedisState import state, save_content
 
 
 class ContentProcessorAgent(BaseAgent):
-    """Handles file processing and content analysis"""
+    """Minimal optimized file processing with Redis state"""
 
     def __init__(self):
         super().__init__("ContentProcessor")
+        self.file_cache = {}
 
     def read_file(self, file_path: str):
-        """Read file and auto-analyze"""
-        ext = Path(file_path).suffix.lower()
+        """Read and cache file content"""
+        if file_path in self.file_cache:
+            return self.file_cache[file_path]
 
+        ext = Path(file_path).suffix.lower()
         try:
             if ext == '.pdf':
                 with open(file_path, 'rb') as f:
@@ -27,130 +32,118 @@ class ContentProcessorAgent(BaseAgent):
             else:
                 return f"Unsupported file: {ext}"
 
-            # Auto-analyze for study planning
-            analysis = self.analyze_for_planning(content, file_path)
+            self.file_cache[file_path] = content
 
-            # Store analysis
-            current_analyses = self.memory.get('file_analyses')
-            current_analyses[file_path] = analysis
-            self.memory.store('file_analyses', current_analyses)
+            # Auto-analyze and save
+            if self.current_user_id:
+                analysis = self.analyze_for_planning(content, file_path)
+                save_content(self.current_user_id, Path(file_path).name, "file_analysis", analysis)
 
-            self.send_message("StudyPlanner", "File analyzed")
             return content
-
         except Exception as e:
             return f"Error reading file: {str(e)}"
 
     def analyze_for_planning(self, content: str, filename: str):
-        """Analyze content for study planning"""
+        """Quick content analysis"""
+        user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
+
         prompt = f"""Analyze for study planning:
+File: {Path(filename).name}
+Style: {user.get('style', 'visual')}
+Content: {content[:1500]}
 
-        File: {Path(filename).name}
-        Content: {content[:1500]}
-
-        Provide:
-        • Subject/topic
-        • Key concepts
-        • Difficulty level
-        • Study time needed
-        • Focus areas
-
-        Keep concise."""
+Provide: subject, key concepts, difficulty, study time, focus areas."""
 
         return self.call_ai(prompt, 400)
 
-    def create_summary(self, file_path: str, summary_type: str, length: str):
-        """Create file summary"""
+    def create_summary(self, file_path: str, summary_type: str = "detailed", length: str = "medium",
+                       original_filename: str = None):
+        """Create summary"""
         content = self.read_file(file_path)
         if content.startswith("Error"):
             return content
 
-        prompt = f"""Create {length} {summary_type} summary:
-        {content[:3000]}
+        user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
 
-        Include key concepts, study focus areas, and study tips."""
+        prompt = f"Create a {length} summary for a {user.get('style', 'visual')} learner:\n{content[:3000]}"
+        result = self.call_ai(prompt, 800)
 
-        return self.call_ai(prompt, 800)
+        if self.current_user_id:
+            filename = original_filename or Path(file_path).name
+            save_content(self.current_user_id, filename, "summary", result)
 
-    def create_notes(self, file_path: str, note_style: str):
-        """Create study notes"""
+        return result
+
+    def create_notes(self, file_path: str, note_style: str = "detailed", original_filename: str = None):
+        """Create notes"""
         content = self.read_file(file_path)
         if content.startswith("Error"):
             return content
 
-        prompt = f"""Create {note_style} study notes:
-        {content[:3000]}
+        user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
 
-        Include main topics, key information, and learning reinforcement."""
+        prompt = f"Create study notes for a {user.get('style', 'visual')} learner:\n{content[:3000]}\n\nInclude main topics, key facts, and review questions."
+        result = self.call_ai(prompt, 800)
 
-        return self.call_ai(prompt, 800)
+        if self.current_user_id:
+            filename = original_filename or Path(file_path).name
+            save_content(self.current_user_id, filename, "notes", result)
 
-    def create_questions(self, file_path: str, question_type: str, difficulty: str):
+        return result
+
+    def create_questions(self, file_path: str, question_type: str = "mixed", difficulty: str = "medium",
+                         original_filename: str = None):
         """Generate questions"""
         content = self.read_file(file_path)
         if content.startswith("Error"):
             return content
 
-        prompt = f"""Generate {difficulty} {question_type} questions:
-        {content[:3000]}
+        user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
 
-        Include recall, comprehension, application questions with answers."""
+        prompt = f"Generate {difficulty} questions for a {user.get('style', 'visual')} learner:\n{content[:3000]}\n\nInclude recall, comprehension, and application questions with answers."
+        result = self.call_ai(prompt, 800)
 
-        return self.call_ai(prompt, 800)
+        if self.current_user_id:
+            filename = original_filename or Path(file_path).name
+            save_content(self.current_user_id, filename, "questions", result)
 
-    def analyze_text(self, content: str):
-        """Analyze direct text"""
-        prompt = f"""Analyze for study:
-        {content[:3000]}
-
-        Provide:
-        • Main themes
-        • Key terms
-        • Difficulty assessment
-        • Study recommendations
-        • Potential questions
-
-        Be comprehensive."""
-
-        result = self.call_ai(prompt)
-        self.send_message("StudyPlanner", "Text analyzed")
         return result
 
     def create_plan_from_processed_file(self, hours: str, deadline: str):
-        """Create study plan from most recently processed file"""
+        """Create study plan from processed content"""
+        if not self.current_user_id:
+            return "No user context available. Please set user first."
 
-        # Get the most recent file analysis
-        file_analyses = self.memory.get('file_analyses')
-        if not file_analyses:
-            return "No files have been processed yet. Please process a file first."
+        user_content = state.get_list(f"user_content:{self.current_user_id}", 10)
+        if not user_content:
+            return "No files processed yet. Please process a file first."
 
-        # Get the last processed file
-        latest_file = list(file_analyses.keys())[-1]
-        latest_analysis = file_analyses[latest_file]
+        # Get content for latest file
+        latest_file = user_content[0]['filename']
+        file_content = [f"{item['type'].upper()}: {item['content']}"
+                        for item in user_content if item['filename'] == latest_file]
 
-        # Extract subject from analysis or filename
-        filename = Path(latest_file).stem
+        if not file_content:
+            return "No processed content found for this file."
 
-        prompt = f"""Create a study plan based on this processed file:
+        user = state.get(f"user:{self.current_user_id}", {})
+        combined_content = "\n\n".join(file_content)
 
-        File: {filename}
-        Analysis: {latest_analysis}
-        Hours Available: {hours}
-        Deadline: {deadline}
+        prompt = f"""Create study plan:
+File: {latest_file}
+Hours: {hours}
+Deadline: {deadline}
+Style: {user.get('style', 'visual')}
 
-        Create a detailed study plan that:
-        • Uses the specific content from this file
-        • Breaks down the {hours} hours across the timeline
-        • Focuses on the key concepts identified in the analysis
-        • Includes review schedules
-        • Provides specific milestones
+CONTENT:
+{combined_content[:2000]}
 
-        Make it actionable and file-specific."""
+Create a plan that uses the content above, breaks down {hours} hours until {deadline}, and matches {user.get('style', 'visual')} learning."""
 
         result = self.call_ai(prompt, 1000)
 
-        # Store the plan and notify StudyPlanner
-        self.memory.store('file_based_plan', result)
-        self.send_message("StudyPlanner", f"Created study plan from {filename}")
+        if self.current_user_id:
+            save_content(self.current_user_id, f"Study Plan - {latest_file}", "study_plan", result)
 
         return result
+

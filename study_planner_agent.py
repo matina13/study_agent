@@ -1,13 +1,15 @@
-#!/usr/bin/env python3
+# study_planner_agent.py
+# !/usr/bin/env python3
 """
-Study Planner Agent
+Enhanced Study Planner Agent with Redis State
 """
 
 from base_agent import BaseAgent
+from RedisState import state, save_content
 
 
 class StudyPlannerAgent(BaseAgent):
-    """Handles study planning, methods, topic breakdown, and coordination"""
+    """Handles study planning with Redis state memory"""
 
     def __init__(self):
         super().__init__("StudyPlanner")
@@ -19,66 +21,68 @@ class StudyPlannerAgent(BaseAgent):
         print("🔗 ContentProcessor connected to StudyPlanner")
 
     def create_plan(self, subject: str, hours: str, deadline: str, focus: str, goals: str):
-        """Create study plan with file context"""
-        file_context = self._get_file_context()
+        """Create study plan with user context from Redis"""
 
-        prompt = f"""Create study plan for {subject}. Hours: {hours}, Deadline: {deadline}
-        Focus: {focus}, Goals: {goals}
+        # Get user context
+        user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
+        user_sessions = state.get_list(f"sessions:{self.current_user_id}", 5) if self.current_user_id else []
 
-        File Context: {file_context}
+        # Build context from previous sessions
+        session_context = ""
+        if user_sessions:
+            recent_subjects = [s.get('subject', '') for s in user_sessions]
+            session_context = f"\nRecent study subjects: {', '.join(recent_subjects)}"
 
-        Include:
-        • Weekly schedule with hours per day
-        • Daily study blocks
-        • Weekly milestones
-        • Study techniques
-        • Review schedules
+        prompt = f"""Create a personalized study plan for {subject}.
 
-        Be specific and actionable."""
+User Profile:
+- Learning Style: {user.get('style', 'visual')}
+- Hours Available: {hours}
+- Deadline: {deadline}
+- Focus Areas: {focus}
+- Goals: {goals}
+{session_context}
+
+Create a detailed study plan with:
+• Weekly schedule breakdown
+• Daily study blocks with specific hours
+• Study techniques suited to their learning style
+• Weekly milestones and checkpoints
+• Review schedules
+• Specific actionable tasks
+
+Make it personalized and realistic."""
 
         result = self.call_ai(prompt, 1000)
-        self.memory.store('current_plan', result)
+
+        # Save plan to Redis
+        if self.current_user_id:
+            save_content(self.current_user_id, f"Study Plan - {subject}", "plan", result)
+
         return result
 
     def get_methods(self, subject: str, topic: str, learning_style: str):
-        """Get study methods with context"""
-        file_context = self._get_file_context()
+        """Get study methods with user context"""
+        user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
 
-        prompt = f"""Best study methods for {subject}, topic: {topic}, style: {learning_style}
+        prompt = f"""Recommend study methods for {subject}, topic: {topic}
 
-        File Context: {file_context}
+User Learning Style: {learning_style or user.get('style', 'visual')}
 
-        Include:
-        • Top 3 techniques
-        • Step-by-step instructions
-        • Tools needed
-        • How to measure success
+Provide:
+• Top 3 techniques for this learning style
+• Step-by-step instructions
+• Tools and resources needed
+• How to measure progress
+• Time estimates
 
-        Make it practical."""
+Make it practical and actionable."""
 
-        return self.call_ai(prompt)
-
-    def break_down_topic(self, subject: str, topic: str, difficulty: str):
-        """Break down complex topic"""
-        file_context = self._get_file_context()
-
-        prompt = f"""Break down {subject} topic "{topic}" for {difficulty} learners
-
-        File Context: {file_context}
-
-        Include:
-        • Prerequisites
-        • 5-7 subtopics in order
-        • For each: concepts, time, examples
-        • Practice exercises
-
-        Clear and organized."""
-
-        return self.call_ai(prompt)
+        return self.call_ai(prompt, 600)
 
     def comprehensive_planning(self, subject: str, hours: str, deadline: str, focus: str, goals: str,
                                files: list = None):
-        """Handle comprehensive planning with file processing"""
+        """Handle comprehensive planning with file processing and Redis state"""
         print(f"\n🎯 Comprehensive planning for {subject}")
 
         results = []
@@ -94,7 +98,12 @@ class StudyPlannerAgent(BaseAgent):
                     if not content.startswith("Error"):
                         insight = self.content_processor.analyze_for_planning(content, file_path)
                         file_insights.append(f"📄 {file_path}: {insight}")
-                except:
+
+                        # Save file analysis to Redis
+                        if self.current_user_id:
+                            save_content(self.current_user_id, file_path, "analysis", insight)
+
+                except Exception as e:
                     continue
 
             if file_insights:
@@ -105,57 +114,57 @@ class StudyPlannerAgent(BaseAgent):
         plan = self.create_plan(subject, hours, deadline, focus, goals)
         results.append(f"STUDY PLAN:\n{plan}")
 
-        # Step 3: Add strategic recommendations
-        recommendations = self._get_recommendations(subject, plan)
+        # Step 3: Add strategic recommendations based on user history
+        recommendations = self.get_recommendations(subject, plan)
         results.append(f"RECOMMENDATIONS:\n{recommendations}")
 
-        # Step 4: Session summary
-        comms = self.memory.get('communications')
+        # Step 4: Session summary from Redis
+        user_sessions = state.get_list(f"sessions:{self.current_user_id}", 5) if self.current_user_id else []
+        user_content = state.get_list(f"user_content:{self.current_user_id}", 5) if self.current_user_id else []
+
         summary = f"""SESSION SUMMARY:
-        • Files Processed: {len(self.memory.get('file_analyses'))}
-        • Agent Communications: {len(comms)}
-        • Enhanced Plan Created: Yes
+• Files Processed: {len(files) if files else 0}
+• Content Saved: {len(user_content)}
+• Recent Sessions: {len(user_sessions)}
+• Enhanced Plan Created: Yes
 
-        Recent Communications:"""
+Recent Study Activity:"""
 
-        for comm in comms[-5:]:
-            summary += f"\n  • {comm['time']} - {comm['from']} → {comm['to']}: {comm['message']}"
+        for session in user_sessions[:3]:
+            activities = len(session.get('activities', []))
+            summary += f"\n  • {session.get('start', '')[:16]} - {session.get('subject', '')}: {activities} activities"
 
         results.append(summary)
 
         return "\n\n" + "=" * 60 + "\n\n".join(results)
 
-    def _get_file_context(self):
-        """Get file analysis context"""
-        analyses = self.memory.get('file_analyses')
-        if not analyses:
-            return "No file analysis available"
+    def get_recommendations(self, subject: str, plan: str):
+        """Add strategic recommendations based on Redis data"""
+        user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
+        sessions = state.get_list(f"sessions:{self.current_user_id}", 10) if self.current_user_id else []
 
-        context = []
-        for file_path, analysis in analyses.items():
-            context.append(f"{file_path}: {analysis}")
+        # Analyze user patterns
+        session_subjects = [s.get('subject', '') for s in sessions]
+        study_frequency = len([s for s in sessions if s.get('end')])
 
-        return "\n".join(context) if context else "No file analysis available"
+        context = f"""User: {user.get('style', 'visual')} learner
+Recent subjects: {', '.join(session_subjects[:3])}
+Study frequency: {study_frequency} completed sessions
+Current plan for: {subject}
 
-    def _get_recommendations(self, subject: str, plan: str):
-        """Add strategic recommendations"""
-        prompt = f"""Provide strategic study recommendations for {subject}:
+Plan preview: {plan[:500]}"""
 
-        Plan: {plan[:1000]}
+        prompt = f"""Based on this user's study history and learning style, provide strategic recommendations:
 
-        Give:
-        • Key success factors
-        • Potential challenges
-        • Optimization tips
-        • Resource suggestions
+{context}
 
-        Keep concise and actionable."""
+Give personalized advice on:
+• Key success factors for this user
+• Potential challenges based on their history
+• Optimization tips for their learning style
+• Resource suggestions
+• Study schedule adjustments
 
-        return self.call_ai(prompt)
+Keep concise and actionable."""
 
-    def show_communications(self):
-        """Show agent communications"""
-        comms = self.memory.get('communications')
-        print(f"\n📞 Communications ({len(comms)}):")
-        for comm in comms[-10:]:
-            print(f"{comm['time']} | {comm['from']} → {comm['to']}: {comm['message']}")
+        return self.call_ai(prompt, 500)
