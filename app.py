@@ -4,7 +4,7 @@ import tempfile
 import os
 from datetime import datetime
 
-from RedisState import *
+from SQLiteState import *
 from study_planner_agent import StudyPlannerAgent
 from content_processor_agent import ContentProcessorAgent
 
@@ -21,9 +21,18 @@ def get_agents():
 
 planner, processor = get_agents()
 
-# User setup
+# User setup with name login
 if 'user_id' not in st.session_state:
-    st.session_state.user_id = create_user()
+    username = st.text_input("👤 Enter your name to continue:", placeholder="e.g.,  Giannis  ")
+    if username:
+        import hashlib
+        user_id = hashlib.md5(username.lower().strip().encode()).hexdigest()[:16]
+        st.session_state.user_id = user_id
+        st.session_state.username = username
+        st.rerun()
+    else:
+        st.info("Please enter your name to use the study system")
+        st.stop()
 
 user_id = st.session_state.user_id
 
@@ -67,6 +76,7 @@ with st.sidebar:
         state.set(f"user:{user_id}", user)
         st.rerun()
 
+    st.write(f"**User:** {st.session_state.get('username', 'Unknown')}")
     st.write(f"**ID:** {user_id[:8]}...")
 
     stats = get_analytics(user_id)

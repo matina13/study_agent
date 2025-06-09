@@ -4,7 +4,7 @@ from pathlib import Path
 import PyPDF2
 import docx
 from base_agent import BaseAgent
-from RedisState import state, save_content
+from SQLiteState import *
 
 
 class ContentProcessorAgent(BaseAgent):

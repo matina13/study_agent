@@ -1,11 +1,7 @@
 # study_planner_agent.py
 # !/usr/bin/env python3
-"""
-Enhanced Study Planner Agent with Redis State
-"""
-
 from base_agent import BaseAgent
-from RedisState import state, save_content
+from SQLiteState import *
 
 
 class StudyPlannerAgent(BaseAgent):

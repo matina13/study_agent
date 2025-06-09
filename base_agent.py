@@ -7,7 +7,7 @@ Enhanced Base Agent with Redis State
 import os
 from dotenv import load_dotenv
 import openai
-from RedisState import state, log_activity
+from SQLiteState import *
 
 
 class BaseAgent:
