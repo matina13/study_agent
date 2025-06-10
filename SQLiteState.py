@@ -12,7 +12,7 @@ class SQLiteState:
         self.db_path = Path("study_system.db")
         self.lock = threading.Lock()
         self.init_db()
-        print("✅ SQLite database initialized")
+        print("SQLite database initialized")
 
     def init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -121,12 +121,6 @@ class SQLiteState:
 state = SQLiteState()
 
 
-def create_user():
-    user_id = str(uuid.uuid4())
-    state.set(f"user:{user_id}", {"created": datetime.now().isoformat(), "style": "visual"})
-    return user_id
-
-
 def get_user(user_id):
     return state.get(f"user:{user_id}", {})
 
@@ -176,26 +170,5 @@ def get_user_content(user_id, limit=10):
 
 def get_analytics(user_id):
     sessions = get_user_sessions(user_id, 50)
-    total_hours = sum(1 for s in sessions if s.get("end"))
     subjects = list(set(s.get("subject", "Unknown") for s in sessions if s.get("subject")))
-    return {"sessions": len(sessions), "hours": total_hours, "subjects": subjects}
-
-
-def get_database_stats():
-    return state.get_stats()
-
-
-def show_all_users():
-    try:
-        with state.get_connection() as conn:
-            user_rows = conn.execute("SELECT user_id, username, learning_style FROM users").fetchall()
-            if user_rows:
-                return [{'user_id': row['user_id'],
-                         'username': row['username'],
-                         'learning_style': row['learning_style']} for row in user_rows]
-
-            data_rows = conn.execute("SELECT key, value FROM data WHERE key LIKE 'study:user:%'").fetchall()
-            return [{'user_id': row['key'].replace('study:user:', ''),
-                     'data': json.loads(row['value'])} for row in data_rows]
-    except:
-        return []
+    return {"sessions": len(sessions), "subjects": subjects}

@@ -1,15 +1,12 @@
-# content_processor_agent.py
 import os
-from pathlib import Path
 import PyPDF2
 import docx
 from base_agent import BaseAgent
 from SQLiteState import *
+from pathlib import Path
 
 
 class ContentProcessorAgent(BaseAgent):
-    """Minimal optimized file processing with Redis state"""
-
     def __init__(self):
         super().__init__("ContentProcessor")
         self.file_cache = {}
@@ -44,7 +41,7 @@ class ContentProcessorAgent(BaseAgent):
             return f"Error reading file: {str(e)}"
 
     def analyze_for_planning(self, content: str, filename: str):
-        """Quick content analysis"""
+        """content analysis"""
         user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
 
         prompt = f"""Analyze for study planning:
@@ -146,4 +143,3 @@ Create a plan that uses the content above, breaks down {hours} hours until {dead
             save_content(self.current_user_id, f"Study Plan - {latest_file}", "study_plan", result)
 
         return result
-

@@ -1,23 +1,18 @@
-# study_planner_agent.py
-# !/usr/bin/env python3
 from base_agent import BaseAgent
 from SQLiteState import *
 
 
 class StudyPlannerAgent(BaseAgent):
-    """Handles study planning with Redis state memory"""
-
     def __init__(self):
         super().__init__("StudyPlanner")
         self.content_processor = None
 
     def register_content_processor(self, content_processor):
-        """Register the content processor agent"""
         self.content_processor = content_processor
-        print("🔗 ContentProcessor connected to StudyPlanner")
+        print(" ContentProcessor connected to StudyPlanner")
 
     def create_plan(self, subject: str, hours: str, deadline: str, focus: str, goals: str):
-        """Create study plan with user context from Redis"""
+        """Create study plan with user context from sql"""
 
         # Get user context
         user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
@@ -51,7 +46,7 @@ Make it personalized and realistic."""
 
         result = self.call_ai(prompt, 1000)
 
-        # Save plan to Redis
+        # Save plan to sql
         if self.current_user_id:
             save_content(self.current_user_id, f"Study Plan - {subject}", "plan", result)
 
@@ -78,12 +73,23 @@ Make it practical and actionable."""
 
     def comprehensive_planning(self, subject: str, hours: str, deadline: str, focus: str, goals: str,
                                files: list = None):
-        """Handle comprehensive planning with file processing and Redis state"""
-        print(f"\n🎯 Comprehensive planning for {subject}")
+        print(f"\n Comprehensive planning for {subject}")
 
         results = []
 
-        # Step 1: Process files if provided
+        if self.current_user_id:
+            user_content = state.get_list(f"user_content:{self.current_user_id}", 10)
+            relevant_content = [item for item in user_content
+                                if item['type'] in ['summary', 'notes', 'analysis', 'questions']]
+
+            if relevant_content:
+                content_insights = []
+                for item in relevant_content[:3]:
+                    content_insights.append(f"{item['type'].upper()} ({item['filename']}): {item['content'][:300]}...")
+
+                if content_insights:
+                    results.append("EXISTING PROCESSED CONTENT:\n" + "\n\n".join(content_insights))
+
         if files and self.content_processor:
             self.send_message("ContentProcessor", "Process files for comprehensive planning")
             file_insights = []
@@ -95,7 +101,7 @@ Make it practical and actionable."""
                         insight = self.content_processor.analyze_for_planning(content, file_path)
                         file_insights.append(f"📄 {file_path}: {insight}")
 
-                        # Save file analysis to Redis
+                        # Save file analysis to sql
                         if self.current_user_id:
                             save_content(self.current_user_id, file_path, "analysis", insight)
 
@@ -105,16 +111,13 @@ Make it practical and actionable."""
             if file_insights:
                 results.append("FILE ANALYSIS:\n" + "\n\n".join(file_insights))
 
-        # Step 2: Create enhanced study plan
         self.send_message("ContentProcessor", "Creating enhanced plan with file context")
         plan = self.create_plan(subject, hours, deadline, focus, goals)
         results.append(f"STUDY PLAN:\n{plan}")
 
-        # Step 3: Add strategic recommendations based on user history
         recommendations = self.get_recommendations(subject, plan)
         results.append(f"RECOMMENDATIONS:\n{recommendations}")
 
-        # Step 4: Session summary from Redis
         user_sessions = state.get_list(f"sessions:{self.current_user_id}", 5) if self.current_user_id else []
         user_content = state.get_list(f"user_content:{self.current_user_id}", 5) if self.current_user_id else []
 
@@ -123,19 +126,12 @@ Make it practical and actionable."""
 • Content Saved: {len(user_content)}
 • Recent Sessions: {len(user_sessions)}
 • Enhanced Plan Created: Yes
-
-Recent Study Activity:"""
-
-        for session in user_sessions[:3]:
-            activities = len(session.get('activities', []))
-            summary += f"\n  • {session.get('start', '')[:16]} - {session.get('subject', '')}: {activities} activities"
-
+"""
         results.append(summary)
 
         return "\n\n" + "=" * 60 + "\n\n".join(results)
 
     def get_recommendations(self, subject: str, plan: str):
-        """Add strategic recommendations based on Redis data"""
         user = state.get(f"user:{self.current_user_id}", {}) if self.current_user_id else {}
         sessions = state.get_list(f"sessions:{self.current_user_id}", 10) if self.current_user_id else []
 

@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
 import streamlit as st
 import tempfile
 import os
-from datetime import datetime
+import hashlib
 
 from SQLiteState import *
 from study_planner_agent import StudyPlannerAgent
@@ -23,9 +22,8 @@ planner, processor = get_agents()
 
 # User setup with name login
 if 'user_id' not in st.session_state:
-    username = st.text_input("👤 Enter your name to continue:", placeholder="e.g.,  Giannis  ")
+    username = st.text_input("Enter your username to continue:", placeholder="e.g.,  Giannis  ")
     if username:
-        import hashlib
         user_id = hashlib.md5(username.lower().strip().encode()).hexdigest()[:16]
         st.session_state.user_id = user_id
         st.session_state.username = username
@@ -82,14 +80,13 @@ with st.sidebar:
     stats = get_analytics(user_id)
 
     if stats["subjects"]:
-        st.subheader("📊 Recent Subjects")
+        st.subheader("Recent Subjects")
         for subject in stats["subjects"][:3]:
             st.write(f"• {subject}")
 
     if stats["sessions"] > 0:
-        st.subheader("📈 Quick Stats")
+        st.subheader("Stats")
         st.write(f"**Sessions:** {stats['sessions']}")
-        st.write(f"**Hours:** {stats['hours']}")
 
 # Main interface
 tab1, tab2, tab3 = st.tabs(["📚 Study Planning", "📄 File Processing", "📝 Content Library"])
@@ -119,8 +116,9 @@ with tab1:
         difficulty = st.selectbox("Current Level", ["Beginner", "Intermediate", "Advanced"], index=1)
     with col7:
         focus = st.text_input("Focus Areas (optional)", placeholder="e.g., Problem solving, Theory")
+    use_files = st.checkbox("Include processed files in plan")
 
-    if st.button("🎯 Create Study Plan", type="primary", use_container_width=True) and subject and hours and deadline:
+    if st.button("Create Study Plan", type="primary", use_container_width=True) and subject and hours and deadline:
         with st.spinner("Creating your study plan..."):
             session_id = start_session(user_id, subject)
 
@@ -128,19 +126,22 @@ with tab1:
             enhanced_focus = f"{focus}, {topic}" if focus and topic else (focus or topic or "General")
             enhanced_goals = f"{goals}. Level: {difficulty}. Daily time: {daily_time or 'flexible'}."
 
-            result = planner.create_plan(subject, hours, deadline, enhanced_focus, enhanced_goals)
+            if use_files:
+                result = planner.comprehensive_planning(subject, hours, deadline, enhanced_focus, enhanced_goals, [])
+            else:
+                result = planner.create_plan(subject, hours, deadline, enhanced_focus, enhanced_goals)
             end_session(session_id)
 
-        st.success("✅ Study plan created!")
-        st.markdown("### 🎯 Your Study Plan")
+        st.success("Study plan created!")
+        st.markdown("### Your Study Plan")
         st.markdown(result)
-        st.download_button("📥 Download", result, f"plan_{datetime.now().strftime('%m%d_%H%M')}.txt",
+        st.download_button("Download", result, f"plan_{datetime.now().strftime('%m%d_%H%M')}.txt",
                            use_container_width=True)
 
 with tab2:
     st.header("Process Files")
 
-    file = st.file_uploader("📁 Upload file", type=['pdf', 'txt', 'docx'])
+    file = st.file_uploader("Upload file", type=['pdf', 'txt', 'docx'])
 
     if file:
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.name.split('.')[-1]}") as tmp:
@@ -153,19 +154,19 @@ with tab2:
             st.session_state.result = None
 
         with col1:
-            if st.button("📋 Summary", use_container_width=True):
+            if st.button(" Summary", use_container_width=True):
                 session_id = start_session(user_id, "Processing")
                 st.session_state.result = processor.create_summary(path, "detailed", "medium", file.name)
                 end_session(session_id)
 
         with col2:
-            if st.button("📝 Notes", use_container_width=True):
+            if st.button(" Notes", use_container_width=True):
                 session_id = start_session(user_id, "Processing")
                 st.session_state.result = processor.create_notes(path, "detailed", file.name)
                 end_session(session_id)
 
         with col3:
-            if st.button("❓ Questions", use_container_width=True):
+            if st.button(" Questions", use_container_width=True):
                 session_id = start_session(user_id, "Processing")
                 st.session_state.result = processor.create_questions(path, "mixed", "medium", file.name)
                 end_session(session_id)
@@ -173,25 +174,27 @@ with tab2:
         if st.session_state.result:
             st.markdown("---")
             st.markdown(st.session_state.result)
-            st.download_button("📥 Download", st.session_state.result,
+            st.download_button(" Download", st.session_state.result,
                                f"content_{datetime.now().strftime('%m%d_%H%M')}.txt")
 
         # File-based plan
         st.markdown("---")
-        st.subheader("📅 Create Plan from File")
+        st.subheader("Create Plan from File")
         col4, col5 = st.columns(2)
         with col4:
             plan_hours = st.text_input("Study Hours")
         with col5:
             plan_deadline = st.text_input("Study Deadline")
 
-        if st.button("📋 Plan from File", use_container_width=True) and plan_hours and plan_deadline:
+        if st.button(" Plan from File", use_container_width=True) and plan_hours and plan_deadline:
+            # use StudyPlanner with file context
             session_id = start_session(user_id, "File Planning")
-            result = processor.create_plan_from_processed_file(plan_hours, plan_deadline)
+            result = planner.comprehensive_planning("File Study", plan_hours, plan_deadline, "File Content",
+                                                    "Master content", [path])
             end_session(session_id)
-            st.markdown("### 📋 File-Based Plan")
+            st.markdown("### File-Based Plan")
             st.markdown(result)
-            st.download_button("📥 Download Plan", result,
+            st.download_button(" Download Plan", result,
                                f"file_plan_{datetime.now().strftime('%m%d_%H%M')}.txt",
                                use_container_width=True)
 

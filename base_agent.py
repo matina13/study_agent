@@ -1,9 +1,3 @@
-# base_agent.py
-# !/usr/bin/env python3
-"""
-Enhanced Base Agent with Redis State
-"""
-
 import os
 from dotenv import load_dotenv
 import openai
@@ -11,8 +5,6 @@ from SQLiteState import *
 
 
 class BaseAgent:
-    """Enhanced base class for agents with Redis state"""
-
     def __init__(self, name: str):
         load_dotenv()
         self.name = name
@@ -21,21 +13,18 @@ class BaseAgent:
 
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            print(f"⚠️  OPENROUTER_API_KEY not found for {name}")
+            print(f" OPENROUTER_API_KEY not found for {name}")
             self.client = None
         else:
             self.client = openai.OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
 
-        print(f"🤖 {name} ready with Redis state")
-
     def set_user(self, user_id: str):
-        """Set current user context"""
+        """Set current user"""
         self.current_user_id = user_id
         self.current_session_id = state.get(f"current_session:{user_id}")
-        print(f"🔧 {self.name} user set to: {user_id}")  # Add this debug line
 
     def call_ai(self, prompt: str, max_tokens: int = 800) -> str:
-        """Enhanced AI call with user context"""
+        """AI call with user context"""
         if not self.client:
             return "AI client not available - check OPENROUTER_API_KEY"
 
@@ -69,7 +58,7 @@ User Request: {prompt}"""
             return f"Error: {str(e)}"
 
     def send_message(self, to_agent: str, message: str):
-        """Send message to another agent (logged in Redis)"""
+        """Send message to another agent"""
         if self.current_session_id:
             log_activity(self.current_session_id, f"Message to {to_agent}: {message}")
-        print(f"📨 {self.name} → {to_agent}: {message}")
+        print(f" {self.name} → {to_agent}: {message}")

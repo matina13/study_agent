@@ -1,6 +1,6 @@
-# Core Requirements for Study System
-streamlit>=1.45.1
-openai>=1.84.0
-python-dotenv>=1.1.0
-PyPDF2>=3.0.1
-python-docx>=1.1.2
+#Requirements for Study System
+streamlit
+openai
+python-dotenv
+PyPDF2
+python-docx
