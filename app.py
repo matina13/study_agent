@@ -6,6 +6,7 @@ import hashlib
 from SQLiteState import *
 from study_planner_agent import StudyPlannerAgent
 from content_processor_agent import ContentProcessorAgent
+from datetime import datetime
 
 st.set_page_config(page_title="Study System", layout="wide")
 
