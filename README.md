@@ -2,6 +2,9 @@
 
 An AI-powered study assistant built with Streamlit. Upload files, generate study plans, and get personalized learning content based on your learning style.
 
+![Screenshot 1](pics/ScreenshotAgent1.png)
+![Screenshot 2](pics/ScreenshotAgent2.png)
+
 ## Features
 
 - **Study Planning** — Generate detailed weekly study plans with daily schedules, milestones, and techniques tailored to your learning style
